@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: Cleaned customer accounts. Emails lower-cased; duplicate sign-ups linked by canonical_customer_id.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: email
+        data_tests: [not_null]
+      - name: canonical_customer_id
+        description: The first account created with this email. Same as customer_id for most people.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+
+  - name: stg_orders
+    description: Cleaned order headers. Status normalised to lower case.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [placed, paid, shipped, delivered, cancelled, returned]
+      - name: total_amount
+        data_tests: [not_null, non_negative]
+      - name: customer_id
+        description: May point to a customer that does not exist (legacy source has no FK).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+              config:
+                severity: warn   # known source issue; facts map these to the "Unknown" customer
+
+  - name: stg_order_items
+    columns:
+      - name: order_item_id
+        data_tests: [unique, not_null]
+      - name: quantity
+        data_tests:
+          - expression_is_true:
+              arguments:
+                expression: "quantity > 0"
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+              config:
+                severity: warn   # line items whose order header was quarantined
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+              config:
+                severity: warn   # unknown products are mapped to the "Unknown" product
+
+  - name: stg_products
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+      - name: list_price
+        data_tests: [not_null, non_negative]
+
+  - name: stg_payments
+    columns:
+      - name: payment_id
+        data_tests: [unique, not_null]
+      - name: payment_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [succeeded, failed, pending, refunded]
+      - name: amount
+        data_tests: [not_null, non_negative]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+              config:
+                severity: warn
+
+  - name: stg_clickstream_events
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: event_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [page_view, product_view, add_to_cart, remove_from_cart, checkout_start, purchase]

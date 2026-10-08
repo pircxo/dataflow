@@ -1,0 +1,54 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Validated data loaded by the Python ingestion engine (Milestone 3).
+    schema: raw
+    loaded_at_field: _ingested_at
+    freshness:
+      warn_after: {count: 26, period: hour}
+      error_after: {count: 50, period: hour}
+    tables:
+      - name: customers
+        description: Customer accounts from the shop's Postgres database.
+        columns:
+          - name: customer_id
+            data_tests: [unique, not_null]
+      - name: orders
+        description: Order headers from the shop's Postgres database.
+        columns:
+          - name: order_id
+            data_tests: [unique, not_null]
+      - name: order_items
+        description: Order lines from the shop's Postgres database.
+        columns:
+          - name: order_item_id
+            data_tests: [unique, not_null]
+      - name: products
+        description: Product catalogue from daily supplier CSV drops.
+        columns:
+          - name: product_id
+            data_tests: [unique, not_null]
+      - name: payments
+        description: Payment transactions from the payments REST API.
+        columns:
+          - name: payment_id
+            data_tests: [unique, not_null]
+      - name: clickstream_events
+        description: Web activity events from JSON-lines files.
+        freshness: null
+        columns:
+          - name: event_id
+            data_tests: [unique, not_null]
+
+  - name: observability
+    description: Pipeline metadata written by the ingestion engine and Airflow.
+    schema: observability
+    tables:
+      - name: ingestion_runs
+      - name: pipeline_runs
+
+  - name: quarantine
+    schema: quarantine
+    tables:
+      - name: rejected_records

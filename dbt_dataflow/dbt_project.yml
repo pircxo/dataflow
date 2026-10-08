@@ -1,0 +1,40 @@
+name: dbt_dataflow
+version: "1.0.0"
+config-version: 2
+profile: dbt_dataflow
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Calendar range for dim_date
+  date_spine_start: "2024-01-01"
+  date_spine_end: "2027-12-31"
+  # Re-process this many days of already-loaded data in incremental models,
+  # to absorb late-arriving updates.
+  incremental_lookback_days: 3
+
+models:
+  dbt_dataflow:
+    staging:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: analytics
+      +materialized: table
+    bi:
+      +schema: analytics
+      +materialized: view
+
+snapshots:
+  dbt_dataflow:
+    +target_schema: snapshots
+
+data_tests:
+  dbt_dataflow:
+    # Keep failing rows in a table so they can be inspected after a run.
+    +store_failures: true
+    +schema: test_failures

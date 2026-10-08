@@ -1,0 +1,99 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: Calendar dimension, one row per day.
+    columns:
+      - name: date_key
+        data_tests: [unique, not_null]
+
+  - name: dim_customers
+    description: One row per real person (duplicate sign-ups merged) + Unknown member (-1).
+    columns:
+      - name: customer_key
+        data_tests: [unique, not_null]
+      - name: email
+        description: Unique after merging duplicate accounts.
+        data_tests: [unique]
+
+  - name: dim_products
+    description: Current product catalogue + UNKNOWN member.
+    columns:
+      - name: product_key
+        data_tests: [unique, not_null]
+
+  - name: fact_orders
+    description: One row per order with item, payment and revenue measures.
+    data_tests:
+      - expression_is_true:
+          arguments:
+            expression: "net_revenue = 0 or is_paid"
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: customer_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_key
+      - name: order_date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [placed, paid, shipped, delivered, cancelled, returned]
+      - name: net_revenue
+        data_tests: [not_null, non_negative]
+
+  - name: fact_order_items
+    description: One row per order line.
+    columns:
+      - name: order_item_id
+        data_tests: [unique, not_null]
+      - name: product_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_key
+      - name: customer_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_key
+
+  - name: fact_payments
+    description: One row per payment attempt (incremental model).
+    columns:
+      - name: payment_id
+        data_tests: [unique, not_null]
+      - name: customer_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_key
+      - name: payment_date_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: has_known_order
+        description: False when the payment references an order we do not have (orphan).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true]
+                quote: false
+              config:
+                severity: warn

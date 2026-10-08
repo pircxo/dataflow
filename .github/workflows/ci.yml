@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (black + flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install "black~=24.10" "flake8~=7.1"
+      - run: black --check --diff .
+      - run: flake8 .
+
+  compose:
+    name: Validate docker-compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env && docker compose config -q
+
+  pipeline:
+    name: End-to-end pipeline + dbt tests
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: dataflow
+          POSTGRES_PASSWORD: dataflow
+          POSTGRES_DB: warehouse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U dataflow -d warehouse"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # One Postgres plays both the warehouse and the source system in CI.
+      WAREHOUSE_HOST: localhost
+      WAREHOUSE_PORT: "5432"
+      WAREHOUSE_USER: dataflow
+      WAREHOUSE_PASSWORD: dataflow
+      WAREHOUSE_DB: warehouse
+      SOURCE_DB_HOST: localhost
+      SOURCE_DB_PORT: "5432"
+      SOURCE_DB_USER: dataflow
+      SOURCE_DB_PASSWORD: dataflow
+      SOURCE_DB_NAME: shop
+      DATA_DIR: data/generated
+      PAYMENTS_API_URL: http://localhost:8000
+      DBT_HOST: localhost
+      DBT_PORT: "5432"
+      DBT_TARGET: ci
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt_dataflow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Unit + integration tests (pytest)
+        run: pytest -q
+
+      - name: Create source database
+        run: PGPASSWORD=dataflow psql -h localhost -U dataflow -d warehouse -c "CREATE DATABASE shop"
+
+      - name: Generate 14 days of messy source data
+        run: python -m data_generators.generate init --days 14
+
+      - name: Start mock payments API (5% random failures to exercise retries)
+        run: |
+          cd api/mock_payments
+          PAYMENTS_FILE=$GITHUB_WORKSPACE/data/generated/payments.json API_FAILURE_RATE=0.05 \
+            nohup uvicorn main:app --port 8000 > /tmp/api.log 2>&1 &
+          for i in $(seq 1 20); do curl -sf localhost:8000/health && exit 0; sleep 1; done
+          cat /tmp/api.log; exit 1
+
+      - name: Source healthcheck
+        run: python -m ingestion.healthcheck
+
+      - name: Ingest (raw + quarantine)
+        run: python -m ingestion.run --run-id "ci-${{ github.run_id }}"
+
+      - name: Re-run ingestion (must be idempotent - nothing new inserted)
+        run: |
+          out=$(python -m ingestion.run --run-id "ci-${{ github.run_id }}-rerun" | tail -1)
+          echo "$out"
+          python -c "import json,sys; s=json.loads(sys.argv[1]); assert s['records_inserted']==0, s" "$out"
+
+      - name: dbt build (snapshot, models, tests)
+        run: dbt build --project-dir dbt_dataflow --target ci
+
+      - name: Show data-quality summary
+        if: always()
+        run: |
+          PGPASSWORD=dataflow psql -h localhost -U dataflow -d warehouse \
+            -c "SELECT * FROM quarantine.rejection_summary ORDER BY entity, records DESC" || true
+
+      - name: Upload dbt artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-artifacts
+          path: |
+            dbt_dataflow/target/run_results.json
+            dbt_dataflow/target/manifest.json
+          if-no-files-found: ignore

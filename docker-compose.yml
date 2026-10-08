@@ -103,6 +103,27 @@ services:
     healthcheck: *pg-healthcheck
     restart: unless-stopped
 
+  # ---------- Mock payments REST API (FastAPI) ----------
+  mock-payments-api:
+    build:
+      context: .
+      dockerfile: api/mock_payments/Dockerfile
+    image: dataflow-mock-payments:latest
+    container_name: dataflow-mock-payments-api
+    environment:
+      PAYMENTS_FILE: /app/data/generated/payments.json
+      API_FAILURE_RATE: ${API_FAILURE_RATE:-0.1}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # ---------- Airflow: one-time setup (migrate DB + create admin user) ----------
   airflow-init:
     <<: *airflow-common
@@ -150,6 +171,8 @@ services:
       <<: *airflow-depends-on
       airflow-init:
         condition: service_completed_successfully
+      mock-payments-api:
+        condition: service_healthy
 
 volumes:
   airflow-db-data:

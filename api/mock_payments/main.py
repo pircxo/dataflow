@@ -84,7 +84,7 @@ def list_payments(
 
     total = len(rows)
     start = (page - 1) * page_size
-    data = rows[start:start + page_size]
+    data = rows[start : start + page_size]
     has_more = start + page_size < total
     return {
         "data": data,

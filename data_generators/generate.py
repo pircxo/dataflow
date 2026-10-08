@@ -57,8 +57,15 @@ CATEGORIES = {  # category -> (min price, max price)
 # Orders are more likely in the afternoon/evening.
 HOUR_WEIGHTS = [1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8, 8, 9, 10, 11, 12, 11, 8, 5, 2]
 CSV_COLUMNS = [
-    "product_id", "product_name", "category", "brand",
-    "unit_cost", "list_price", "currency", "is_active", "updated_at",
+    "product_id",
+    "product_name",
+    "category",
+    "brand",
+    "unit_cost",
+    "list_price",
+    "currency",
+    "is_active",
+    "updated_at",
 ]
 
 
@@ -104,9 +111,7 @@ class Ctx:
 # ---------------------------------------------------------------------------
 def ts_in_day(rng: random.Random, day: date) -> datetime:
     hour = rng.choices(range(24), weights=HOUR_WEIGHTS)[0]
-    return datetime.combine(day, time(hour), tzinfo=timezone.utc) + timedelta(
-        seconds=rng.randint(0, 3599)
-    )
+    return datetime.combine(day, time(hour), tzinfo=timezone.utc) + timedelta(seconds=rng.randint(0, 3599))
 
 
 def iso(ts: datetime) -> str:
@@ -137,8 +142,7 @@ def insert_rows(engine: Engine, table: str, rows: list[dict]) -> None:
         return
     cols = list(rows[0])
     sql = text(
-        f"INSERT INTO public.{table} ({', '.join(cols)}) "
-        f"VALUES ({', '.join(':' + c for c in cols)})"
+        f"INSERT INTO public.{table} ({', '.join(cols)}) " f"VALUES ({', '.join(':' + c for c in cols)})"
     )
     with engine.begin() as conn:
         conn.execute(sql, rows)
@@ -202,8 +206,7 @@ def messy_product_rows(ctx: Ctx, clean_rows: list[dict]) -> list[dict]:
             dup = dict(clean)
             dup["list_price"] = round(float(clean["list_price"]) * 1.1, 2)
             dup["updated_at"] = iso(
-                datetime.fromisoformat(clean["updated_at"].replace("Z", "+00:00"))
-                + timedelta(seconds=1)
+                datetime.fromisoformat(clean["updated_at"].replace("Z", "+00:00")) + timedelta(seconds=1)
             )
             ctx.catalog[clean["product_id"]]["list_price"] = dup["list_price"]
             out.append({k: ("true" if v is True else v) for k, v in dup.items()})
@@ -290,10 +293,16 @@ def simulate_customer_updates(ctx: Ctx, day: date) -> int:
         ids = rng.sample(sorted(all_ids), k=min(rng.randint(2, 10), len(all_ids)))
         for cid in ids:
             conn.execute(
-                text("UPDATE customers SET city = :city, phone = :phone, updated_at = :ts "
-                     "WHERE customer_id = :id"),
-                {"city": ctx.fake.city(), "phone": ctx.fake.phone_number(),
-                 "ts": ts_in_day(rng, day), "id": cid},
+                text(
+                    "UPDATE customers SET city = :city, phone = :phone, updated_at = :ts "
+                    "WHERE customer_id = :id"
+                ),
+                {
+                    "city": ctx.fake.city(),
+                    "phone": ctx.fake.phone_number(),
+                    "ts": ts_in_day(rng, day),
+                    "id": cid,
+                },
             )
     return len(ids)
 
@@ -432,8 +441,12 @@ def make_orders_for_day(ctx: Ctx, day: date, customer_ids: list[int]) -> None:
     ctx.counts["order_items"] += len(items)
 
 
-NEXT_STATUS = {"placed": ["paid", "cancelled"], "paid": ["shipped"], "shipped": ["delivered"],
-               "delivered": ["returned"]}
+NEXT_STATUS = {
+    "placed": ["paid", "cancelled"],
+    "paid": ["shipped"],
+    "shipped": ["delivered"],
+    "delivered": ["returned"],
+}
 STATUS_PROB = {"placed": 0.85, "paid": 0.7, "shipped": 0.6, "delivered": 0.02}
 
 
@@ -442,11 +455,15 @@ def progress_orders(ctx: Ctx, day: date) -> None:
     rng = ctx.rng
     with ctx.engine.begin() as conn:
         rows = conn.execute(
-            text("SELECT order_id, lower(trim(order_status)) FROM orders "
-                 "WHERE lower(trim(order_status)) IN ('placed','paid','shipped','delivered') "
-                 "AND updated_at < :day_start AND updated_at > :cutoff"),
-            {"day_start": datetime.combine(day, time(), tzinfo=timezone.utc),
-             "cutoff": datetime.combine(day - timedelta(days=30), time(), tzinfo=timezone.utc)},
+            text(
+                "SELECT order_id, lower(trim(order_status)) FROM orders "
+                "WHERE lower(trim(order_status)) IN ('placed','paid','shipped','delivered') "
+                "AND updated_at < :day_start AND updated_at > :cutoff"
+            ),
+            {
+                "day_start": datetime.combine(day, time(), tzinfo=timezone.utc),
+                "cutoff": datetime.combine(day - timedelta(days=30), time(), tzinfo=timezone.utc),
+            },
         ).all()
         updates = []
         for order_id, status in rows:
@@ -486,8 +503,11 @@ def write_clickstream(ctx: Ctx, day: date, customer_ids: list[int]) -> None:
         session_id = new_uuid(rng)
         customer_id = rng.choice(customer_ids) if rng.random() < 0.6 else None
         ts = ts_in_day(rng, day)
-        context = {"device": rng.choice(DEVICES), "browser": rng.choice(BROWSERS),
-                   "country": rng.choice(["US", "GB", "DE", "GE", "FR"])}
+        context = {
+            "device": rng.choice(DEVICES),
+            "browser": rng.choice(BROWSERS),
+            "country": rng.choice(["US", "GB", "DE", "GE", "FR"]),
+        }
         for _ in range(rng.randint(1, 8)):
             event_type = rng.choice(EVENT_TYPES)
             product_id = rng.choice(product_ids) if event_type != "page_view" else None
@@ -560,6 +580,8 @@ def save_state(ctx: Ctx, last_day: date, seed: int, days_generated: int) -> None
 
 
 def cmd_init(ctx: Ctx, days: int, end: date, seed: int) -> None:
+    if end > date.today():
+        raise SystemExit("--end cannot be in the future")
     start = end - timedelta(days=days - 1)
     print(f"Resetting sources and generating {days} days: {start} -> {end}")
 
@@ -593,6 +615,10 @@ def cmd_append(ctx: Ctx, day: date | None, force: bool) -> None:
     day = day or last_day + timedelta(days=1)
     if day <= last_day and not force:
         raise SystemExit(f"{day} already generated (last day {last_day}). Use --force to redo.")
+    if day > date.today():
+        # Future-dated rows would (correctly) be quarantined by the ingestion
+        # timestamp guard, so never simulate days that haven't happened yet.
+        raise SystemExit(f"{day} is in the future; nothing to simulate yet.")
     load_counters(ctx)
     print(f"Simulating {day}")
     simulate_day(ctx, day)
@@ -600,7 +626,9 @@ def cmd_append(ctx: Ctx, day: date | None, force: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     p_init = sub.add_parser("init", help="wipe sources and generate history")
     p_init.add_argument("--days", type=int, default=60)
@@ -610,8 +638,12 @@ def main() -> None:
     p_app.add_argument("--date", type=date.fromisoformat, default=None)
     p_app.add_argument("--force", action="store_true")
     for p in (p_init, p_app):
-        p.add_argument("--mess-rate", type=float, default=0.03,
-                       help="probability of each kind of corruption per record (default 0.03)")
+        p.add_argument(
+            "--mess-rate",
+            type=float,
+            default=0.03,
+            help="probability of each kind of corruption per record (default 0.03)",
+        )
     args = parser.parse_args()
 
     seed = getattr(args, "seed", 42)
@@ -619,7 +651,8 @@ def main() -> None:
     fake = Faker()
     Faker.seed(seed)
     ctx = Ctx(
-        rng=rng, fake=fake,
+        rng=rng,
+        fake=fake,
         engine=create_engine(settings.source_db_url(), future=True),
         data_dir=settings.data_dir(),
         mess=Mess(rng=rng, rate=args.mess_rate),

@@ -1,6 +1,6 @@
 # DataFlow — Production-Ready E-commerce Data Pipeline
 
-[![CI](https://github.com/OWNER/dataflow/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/dataflow/actions/workflows/ci.yml)
+[![CI](https://github.com/pircxo/dataflow/actions/workflows/ci.yml/badge.svg)](https://github.com/pircxo/dataflow/actions/workflows/ci.yml)
 
 An end-to-end batch data pipeline for an online shop. It pulls **messy data from four different
 kinds of sources**, keeps bad records in a **quarantine** instead of losing them, loads the good ones
@@ -98,7 +98,7 @@ erDiagram
 You need **Docker Desktop** (give it ≥ 4 GB RAM). On Windows, run commands in **WSL2**.
 
 ```bash
-git clone https://github.com/OWNER/dataflow.git && cd dataflow
+git clone https://github.com/pircxo/dataflow.git && cd dataflow
 make up          # = cp .env.example .env && docker compose up -d --build
 ```
 

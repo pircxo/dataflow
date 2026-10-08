@@ -1,0 +1,36 @@
+# Secrets
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Airflow
+airflow/logs/*
+!airflow/logs/.gitkeep
+airflow.cfg
+airflow.db
+webserver_config.py
+standalone_admin_password.txt
+
+# dbt
+dbt_dataflow/target/
+dbt_dataflow/dbt_packages/
+dbt_dataflow/logs/
+.user.yml
+
+# Generated data (the generators are the source of truth)
+data/generated/*
+!data/generated/.gitkeep
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

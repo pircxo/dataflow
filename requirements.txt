@@ -1,0 +1,11 @@
+# Runtime deps for ingestion + dbt.
+# Installed into /opt/pipeline_venv inside the Airflow image, and into .venv locally.
+pandas~=2.2
+SQLAlchemy~=2.0
+psycopg2-binary~=2.9
+requests~=2.32
+tenacity~=9.0
+pydantic~=2.9
+python-dotenv~=1.0
+dbt-core~=1.9.0
+dbt-postgres~=1.9.0

@@ -11,7 +11,7 @@ select
     upper(trim(product_id))                      as product_id,
     page_url,
     event_ts,
-    event_ts::date                               as event_date,
+    (event_ts at time zone 'UTC')::date          as event_date,
     context ->> 'device'                         as device_type,
     context ->> 'browser'                        as browser,
     upper(context ->> 'country')                 as country_code,

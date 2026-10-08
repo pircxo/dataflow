@@ -36,7 +36,7 @@ select
     lp.phone,
     lp.country_code,
     p.created_at                                    as signed_up_at,
-    p.created_at::date                              as signup_date,
+    (p.created_at at time zone 'UTC')::date                            as signup_date,
     a.account_count,
     a.account_count > 1                             as has_duplicate_accounts,
     a.linked_customer_ids,

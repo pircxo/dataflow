@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: bi_daily_revenue
+    description: Revenue per calendar day (zero-filled), with 7-day average and month-to-date.
+    columns:
+      - name: date
+        data_tests: [unique, not_null]
+      - name: net_revenue
+        data_tests: [non_negative]
+
+  - name: bi_revenue_by_category
+    description: Monthly revenue, units and gross margin per product category.
+    data_tests:
+      - expression_is_true:
+          arguments:
+            expression: "revenue >= 0"
+
+  - name: bi_order_volume
+    description: Orders per day by status and new vs returning customers.
+    data_tests:
+      - expression_is_true:
+          arguments:
+            expression: "orders_new_customers + orders_returning_customers = total_orders"
+    columns:
+      - name: date
+        data_tests: [unique, not_null]
+
+  - name: bi_customer_ltv
+    description: Lifetime value, recency and segment per customer.
+    columns:
+      - name: customer_key
+        data_tests: [unique, not_null]
+      - name: customer_segment
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [New, Active, At risk, Lapsed]
+
+  - name: bi_payment_failure_rate
+    description: Failed payment rate per day and method; payment_method = 'ALL' is the daily total.
+    data_tests:
+      - expression_is_true:
+          arguments:
+            expression: "failure_rate_pct between 0 and 100"
+
+  - name: bi_kpi_summary
+    description: One row of headline KPIs for dashboard cards.

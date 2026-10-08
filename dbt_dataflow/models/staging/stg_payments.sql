@@ -11,7 +11,7 @@ select
     lower(trim(method))                          as payment_method,
     failure_reason,
     created_at,
-    created_at::date                             as payment_date,
+    (created_at at time zone 'UTC')::date        as payment_date,
     updated_at,
     lower(trim(status)) = 'succeeded'            as is_successful,
     lower(trim(status)) = 'failed'               as is_failed,

@@ -128,6 +128,22 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ---------- Optional BI tool: docker compose --profile bi up -d metabase ----------
+  metabase:
+    image: metabase/metabase:v0.50.36
+    container_name: dataflow-metabase
+    profiles: ["bi"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase-data:/metabase-data
+    environment:
+      MB_DB_FILE: /metabase-data/metabase.db
+    depends_on:
+      warehouse-db:
+        condition: service_healthy
+    restart: unless-stopped
+
   # ---------- Airflow: one-time setup (migrate DB + create admin user) ----------
   airflow-init:
     <<: *airflow-common
@@ -182,3 +198,4 @@ volumes:
   airflow-db-data:
   warehouse-db-data:
   source-db-data:
+  metabase-data:

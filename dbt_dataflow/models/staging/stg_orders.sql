@@ -7,7 +7,8 @@ select
     customer_id,
     lower(trim(order_status))                    as order_status,
     order_ts,
-    order_ts::date                               as order_date,
+    -- business day in UTC, independent of the database server's timezone
+    (order_ts at time zone 'UTC')::date          as order_date,
     nullif(trim(shipping_city), '')              as shipping_city,
     total_amount,
     upper(trim(currency))                        as currency_code,

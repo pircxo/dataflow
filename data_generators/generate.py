@@ -619,7 +619,7 @@ def cmd_append(ctx: Ctx, day: date | None, force: bool, init_if_missing: bool = 
         if not init_if_missing:
             raise SystemExit("No generator state found. Run `init` first.")
         end = min(day or date.today() - timedelta(days=1), date.today())
-        cmd_init(ctx, 30, end, seed=42)
+        cmd_init(ctx, 60, end, seed=42)
         return
 
     last_day = load_state(ctx)
@@ -657,7 +657,7 @@ def main() -> None:
     p_app = sub.add_parser("append", help="simulate one more day")
     p_app.add_argument("--date", type=date.fromisoformat, default=None)
     p_app.add_argument("--force", action="store_true", help="re-simulate a day that already exists")
-    p_app.add_argument("--init-if-missing", action="store_true", help="run `init` (30 days) if no state")
+    p_app.add_argument("--init-if-missing", action="store_true", help="run `init` (60 days) if no state")
     for p in (p_init, p_app):
         p.add_argument(
             "--mess-rate",

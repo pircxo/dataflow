@@ -121,6 +121,7 @@ make psql         # SQL shell on the warehouse (port 5433 from your laptop)
 | Warehouse Postgres | `localhost:5433`, db `warehouse`, user/pass `dataflow` |
 | Source (shop) Postgres | `localhost:5434`, db `shop`, user/pass `shop` |
 | Mock payments API | http://localhost:8000/docs |
+| Metabase (optional) | http://localhost:3000 — `docker compose --profile bi up -d metabase` |
 
 No Make? Every target is a one-liner — see the [`Makefile`](Makefile). `make help` lists them all.
 
@@ -166,6 +167,7 @@ pytest -q
 │   ├── pipeline.py / run.py    per-source jobs, CLI
 │   └── sql/warehouse_ddl.sql   raw, quarantine, observability tables
 ├── tests/                      pytest (unit + Postgres integration)
+├── Makefile                    shortcuts (`make help`)
 └── .github/workflows/ci.yml    lint + full pipeline + dbt build on every PR
 ```
 
@@ -238,6 +240,41 @@ quarantined. For email, set `ALERT_EMAIL` and the `AIRFLOW__SMTP__*` values.
 
 ---
 
+## BI layer (Power BI / Metabase)
+
+Six views in the `analytics` schema, built and **tested by dbt** (`dbt_dataflow/models/bi/`):
+
+| View | Grain | Answers |
+|---|---|---|
+| `bi_daily_revenue` | day (zero-filled calendar) | Net revenue, gross order value, refunds, AOV, 7-day average, month-to-date |
+| `bi_revenue_by_category` | month × category | Revenue, units, gross margin % by category |
+| `bi_order_volume` | day | Orders by status, new vs returning customers, orders with data-quality issues |
+| `bi_customer_ltv` | customer | Lifetime value, AOV, days since last order, segment (New / Active / At risk / Lapsed), LTV quartile |
+| `bi_payment_failure_rate` | day × payment method (+ `ALL`) | Failed-payment rate, failed amount, most common failure reason |
+| `bi_kpi_summary` | one row | Headline KPIs: last 30 days vs previous 30, avg LTV, failed-payment rate, last pipeline status |
+
+Definitions used everywhere:
+
+- **Net revenue** = order total of orders that are **paid** and **not cancelled / returned**.
+- **Customer LTV** = sum of net revenue per real person (duplicate accounts merged).
+- **Failed payment rate** = failed ÷ settled attempts (pending attempts are left out until they resolve).
+- All dates are **UTC** business days.
+
+**Power BI:** *Get data → PostgreSQL database* → server `localhost:5433`, database `warehouse`,
+user/pass `dataflow` → pick the `analytics.bi_*` views (Import mode is fine at this size).
+Suggested page: KPI cards from `bi_kpi_summary`, a line chart of `bi_daily_revenue`, a stacked
+column chart of `bi_revenue_by_category`, a table of top `bi_customer_ltv`, and a line chart of
+`bi_payment_failure_rate` filtered to `ALL`.
+
+**Metabase (free, runs in Docker):**
+
+```bash
+docker compose --profile bi up -d metabase    # then open http://localhost:3000
+```
+Add a PostgreSQL database: host `warehouse-db`, port `5432`, db `warehouse`, user/pass `dataflow`.
+
+---
+
 ## Runbook
 
 ### The payments API is down
@@ -265,7 +302,7 @@ FROM observability.ingestion_runs ORDER BY id DESC LIMIT 12;
 | Re-load everything | Trigger with `{"full_refresh": true}` (also rebuilds incremental dbt models) |
 | Only one source | `python -m ingestion.run --sources payments` |
 | Rebuild one dbt model and what depends on it | `dbt build -s fact_payments+ --project-dir dbt_dataflow` |
-| Rebuild an incremental model from scratch | `dbt run -s fact_payments --full-refresh --project-dir dbt_dataflow` |
+| Rebuild an incremental model from scratch (**always do this after changing its logic** — incremental runs only touch recent rows, so old rows would keep the old logic) | `dbt run -s fact_payments+ --full-refresh --project-dir dbt_dataflow` |
 
 Backfills never move a watermark **backwards** (`GREATEST(old, new)`), so the next normal run continues correctly.
 

@@ -9,3 +9,5 @@ pydantic~=2.9
 python-dotenv~=1.0
 dbt-core~=1.11.0
 dbt-postgres~=1.10.0
+# Demo only: simulates new source data each day (data_generators/)
+Faker>=30

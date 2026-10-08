@@ -4,3 +4,4 @@ extend-ignore = E203, W503
 exclude = .venv,venv,airflow/logs,dbt_dataflow/target,dbt_dataflow/dbt_packages,data
 per-file-ignores =
     __init__.py: F401
+    airflow/dags/dataflow_pipeline_dag.py: E501

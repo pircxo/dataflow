@@ -609,20 +609,40 @@ def cmd_init(ctx: Ctx, days: int, end: date, seed: int) -> None:
     save_state(ctx, end, seed, days)
 
 
-def cmd_append(ctx: Ctx, day: date | None, force: bool) -> None:
+def cmd_append(ctx: Ctx, day: date | None, force: bool, init_if_missing: bool = False) -> None:
+    """Simulate every missing day up to `day` (default: the next day).
+
+    Re-running for a day that already exists is a no-op (exit 0), so a scheduler can
+    safely retry or re-run it.
+    """
+    if not (ctx.state_dir / "state.json").exists():
+        if not init_if_missing:
+            raise SystemExit("No generator state found. Run `init` first.")
+        end = min(day or date.today() - timedelta(days=1), date.today())
+        cmd_init(ctx, 30, end, seed=42)
+        return
+
     last_day = load_state(ctx)
     state = json.loads((ctx.state_dir / "state.json").read_text())
     day = day or last_day + timedelta(days=1)
-    if day <= last_day and not force:
-        raise SystemExit(f"{day} already generated (last day {last_day}). Use --force to redo.")
     if day > date.today():
         # Future-dated rows would (correctly) be quarantined by the ingestion
         # timestamp guard, so never simulate days that haven't happened yet.
-        raise SystemExit(f"{day} is in the future; nothing to simulate yet.")
+        print(f"{day} is in the future; nothing to simulate yet.")
+        return
+    if day <= last_day and not force:
+        print(f"{day} already generated (last day {last_day}); nothing to do.")
+        return
+
+    first = day if force else last_day + timedelta(days=1)
     load_counters(ctx)
-    print(f"Simulating {day}")
-    simulate_day(ctx, day)
-    save_state(ctx, max(day, last_day), state["seed"], state["days_generated"] + 1)
+    current = first
+    while current <= day:
+        print(f"Simulating {current}")
+        simulate_day(ctx, current)
+        current += timedelta(days=1)
+    generated = state["days_generated"] + (day - first).days + 1
+    save_state(ctx, max(day, last_day), state["seed"], generated)
 
 
 def main() -> None:
@@ -636,7 +656,8 @@ def main() -> None:
     p_init.add_argument("--seed", type=int, default=42)
     p_app = sub.add_parser("append", help="simulate one more day")
     p_app.add_argument("--date", type=date.fromisoformat, default=None)
-    p_app.add_argument("--force", action="store_true")
+    p_app.add_argument("--force", action="store_true", help="re-simulate a day that already exists")
+    p_app.add_argument("--init-if-missing", action="store_true", help="run `init` (30 days) if no state")
     for p in (p_init, p_app):
         p.add_argument(
             "--mess-rate",
@@ -660,7 +681,7 @@ def main() -> None:
     if args.command == "init":
         cmd_init(ctx, args.days, args.end, seed)
     else:
-        cmd_append(ctx, args.date, args.force)
+        cmd_append(ctx, args.date, args.force, args.init_if_missing)
 
     print("\nGenerated:")
     for k, v in sorted(ctx.counts.items()):

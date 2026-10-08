@@ -34,11 +34,15 @@ x-airflow-common: &airflow-common
     PIPELINE_PYTHON: /opt/pipeline_venv/bin/python
     DBT_BIN: /opt/pipeline_venv/bin/dbt
     PROJECT_ROOT: /opt/airflow
+    # Airflow connection used by the metrics task (PostgresHook conn_id "dataflow_warehouse")
+    AIRFLOW_CONN_DATAFLOW_WAREHOUSE: postgresql://${WAREHOUSE_USER}:${WAREHOUSE_PASSWORD}@warehouse-db:5432/${WAREHOUSE_DB}
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
     - ./ingestion:/opt/airflow/ingestion
+    - ./data_generators:/opt/airflow/data_generators
+    - ./docker/postgres/source:/opt/airflow/docker/postgres/source:ro
     - ./dbt_dataflow:/opt/airflow/dbt_dataflow
     - ./data:/opt/airflow/data
   user: "${AIRFLOW_UID:-50000}:0"
